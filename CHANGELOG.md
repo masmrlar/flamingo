@@ -53,6 +53,7 @@
       ```
     - Option 2:
       use `go mod vendor` and link the modules after this from vendor folder
+- adjust prefixrouter.baseurl in flamingo.router.path
 
 ## v2
 

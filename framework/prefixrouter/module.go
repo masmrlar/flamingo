@@ -80,31 +80,16 @@ func (m *Module) serve(
 
 		areas, _ := root.GetFlatContexts()
 		for _, area := range areas {
-			b, _ := area.Configuration.Get("flamingo.router.path")
-			baseURL, _ := b.(string)
 
-			// allow to override the baseurl
-			if baseurlVal, ok := area.Configuration.Get("prefixrouter.baseurl"); ok {
-				baseURL = baseurlVal.(string)
-			}
-
-			if strings.HasPrefix(baseURL, "/") {
-				baseURL = "scheme://host" + baseURL
-			}
-
-			if baseURL == "" {
-				m.logger.WithField("category", "prefixrouter").Warn("No baseurl configured for config area %v", area.Name)
-				continue
-			}
-
-			m.logger.WithField("category", "prefixrouter").Info("Routing ", area.Name, " at ", baseURL)
 			area.Injector.Bind((*flamingo.Logger)(nil)).ToInstance(m.logger.WithField("area", area.Name))
 			areaRouter := area.Injector.GetInstance(web.Router{}).(*web.Router)
-			prefix := areaRouter.Base().Host + areaRouter.Base().Path
-			// allow to override the baseurl
-			if baseurlVal, ok := area.Configuration.Get("prefixrouter.baseurl"); ok {
-				prefix = baseurlVal.(string)
+			prefix, loggingPrefix := getPrefixFromConfig(areaRouter)
+			if prefix == "/" {
+				m.logger.WithField("category", "prefixrouter").Warn("No prefix configured for config area ", area.Name, "!  Area is not routed by prefixrouter!")
+				continue
 			}
+			m.logger.WithField("category", "prefixrouter").Info("Routing area '", area.Name, "' at prefix '", loggingPrefix, "'")
+
 			frontRouter.Add(prefix, routerHandler{area: area.Name, handler: areaRouter.Handler()})
 		}
 
@@ -158,4 +143,15 @@ func (m *Module) Notify(ctx context.Context, event flamingo.Event) {
 			m.logger.WithField("category", "prefixrouter").Error("unexpected error on server shutdown: ", err)
 		}
 	}
+}
+
+//getPrefixFromConfig - helper to get the routing prefix from the current config area
+// @param *web.Router  the initialized base router, that uses the flamingo.router.* configurations
+func getPrefixFromConfig(areasBaseRouter *web.Router) (prefix string, prefixForLogging string) {
+	prefix = areasBaseRouter.Base().Host + areasBaseRouter.Base().Path
+	prefixForLogging = prefix
+	if strings.HasPrefix(prefixForLogging, "/") {
+		prefixForLogging = "scheme://host" + prefixForLogging
+	}
+	return
 }
